@@ -4,130 +4,130 @@ local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Rayfield (must be inside game as ModuleScript OR your current loader setup)
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local ESPEnabled = true
+local ESPData = {}
 
-local Window = Rayfield:CreateWindow({
-	Name = "Player Panel"
-})
+--========================
+-- CREATE ESP FOR PLAYER
+--========================
+local function createESP(plr)
+	if plr == LP then return end
 
-local Tab = Window:CreateTab("Tools", 4483362458)
+	local function setupCharacter(char)
+		local hrp = char:WaitForChild("HumanoidRootPart", 5)
+		local hum = char:WaitForChild("Humanoid", 5)
+		local head = char:WaitForChild("Head", 5)
 
--- STATES
-local ESP = false
-local RainbowESP = false
-local Spectate = false
-local Target = nil
+		if not hrp or not hum or not head then return end
 
--- RAINBOW
-local RainbowColor = Color3.fromRGB(255,0,0)
-
-task.spawn(function()
-	while true do
-		RainbowColor = Color3.fromHSV((tick()%5)/5,1,1)
-		task.wait(0.03)
-	end
-end)
-
--- ESP FUNCTION
-local function AddESP(p)
-	if p == LP or not p.Character then return end
-
-	local h = p.Character:FindFirstChild("ESP")
-	if not h then
-		h = Instance.new("Highlight")
-		h.Name = "ESP"
-		h.FillTransparency = 0.5
-		h.OutlineTransparency = 0
-		h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-		h.Parent = p.Character
-	end
-end
-
--- PLAYER LIST REFRESH
-local function RefreshPlayers()
-	for _,v in ipairs(Tab:GetChildren()) do
-		if v:IsA("TextButton") then v:Destroy() end
-	end
-
-	for _,p in ipairs(Players:GetPlayers()) do
-		if p ~= LP then
-
-			Tab:CreateButton({
-				Name = "Spectate: "..p.Name,
-				Callback = function()
-					Target = p
-					Spectate = true
-				end
-			})
-
-			Tab:CreateButton({
-				Name = "Teleport: "..p.Name,
-				Callback = function()
-					if p.Character and LP.Character then
-						LP.Character.HumanoidRootPart.CFrame =
-							p.Character.HumanoidRootPart.CFrame + Vector3.new(2,0,0)
-					end
-				end
-			})
-
-		end
-	end
-end
-
-Players.PlayerAdded:Connect(RefreshPlayers)
-Players.PlayerRemoving:Connect(RefreshPlayers)
-RefreshPlayers()
-
--- MAIN LOOP
-RunService.RenderStepped:Connect(function()
-
-	-- spectate
-	if Spectate and Target and Target.Character then
-		Camera.CameraSubject = Target.Character:FindFirstChildOfClass("Humanoid")
-	end
-
-	-- ESP
-	if ESP then
-		for _,p in ipairs(Players:GetPlayers()) do
-			AddESP(p)
-
-			local h = p.Character and p.Character:FindFirstChild("ESP")
-			if h then
-				if RainbowESP then
-					h.FillColor = RainbowColor
-					h.OutlineColor = RainbowColor
-				else
-					h.FillColor = Color3.fromRGB(255,0,0)
+		-- CLEAN OLD
+		if ESPData[plr] then
+			for _,v in pairs(ESPData[plr]) do
+				if typeof(v) == "Instance" then
+					v:Destroy()
+				elseif typeof(v) == "table" and v.Remove then
+					v:Remove()
 				end
 			end
 		end
+
+		-- BOX
+		local box = Instance.new("BoxHandleAdornment")
+		box.Name = "ESPBox"
+		box.Size = Vector3.new(4, 6, 4)
+		box.Adornee = hrp
+		box.AlwaysOnTop = true
+		box.ZIndex = 5
+		box.Transparency = 0.6
+		box.Color3 = Color3.fromRGB(255, 50, 50)
+		box.Parent = hrp
+
+		-- HEALTH UI
+		local billboard = Instance.new("BillboardGui")
+		billboard.Size = UDim2.new(0, 100, 0, 40)
+		billboard.StudsOffset = Vector3.new(0, 3, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Parent = head
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1,0,1,0)
+		label.BackgroundTransparency = 1
+		label.TextScaled = true
+		label.TextColor3 = Color3.new(1,1,1)
+		label.Parent = billboard
+
+		-- TRACER
+		local att0 = Instance.new("Attachment", hrp)
+		local att1 = Instance.new("Attachment")
+		att1.Parent = workspace.Terrain
+
+		local beam = Instance.new("Beam")
+		beam.Attachment0 = att0
+		beam.Attachment1 = att1
+		beam.Width0 = 0.05
+		beam.Width1 = 0.05
+		beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+		beam.Parent = hrp
+
+		ESPData[plr] = {
+			box = box,
+			billboard = billboard,
+			label = label,
+			beam = beam,
+			att0 = att0,
+			att1 = att1,
+			hum = hum
+		}
 	end
 
-end)
-
--- UI
-
-Tab:CreateToggle({
-	Name = "ESP",
-	Callback = function(v)
-		ESP = v
+	if plr.Character then
+		setupCharacter(plr.Character)
 	end
-})
 
-Tab:CreateToggle({
-	Name = "Rainbow ESP",
-	Callback = function(v)
-		RainbowESP = v
-	end
-})
+	plr.CharacterAdded:Connect(setupCharacter)
+end
 
-Tab:CreateToggle({
-	Name = "Spectate",
-	Callback = function(v)
-		Spectate = v
-		if not v then
-			Camera.CameraSubject = LP.Character:FindFirstChildOfClass("Humanoid")
+--========================
+-- UPDATE LOOP
+--========================
+RunService.RenderStepped:Connect(function()
+
+	if not ESPEnabled then return end
+
+	for plr, data in pairs(ESPData) do
+		local char = plr.Character
+		if char and data.hum then
+
+			-- HEALTH
+			local hp = math.floor(data.hum.Health)
+			data.label.Text = plr.Name .. " [" .. hp .. " HP]"
+
+			-- TRACER POSITION
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local pos = Camera.CFrame.Position
+				data.att1.WorldPosition = pos
+			end
 		end
 	end
-})
+end)
+
+--========================
+-- PLAYER HANDLING
+--========================
+for _,p in ipairs(Players:GetPlayers()) do
+	createESP(p)
+end
+
+Players.PlayerAdded:Connect(createESP)
+
+Players.PlayerRemoving:Connect(function(p)
+	if ESPData[p] then
+		for _,v in pairs(ESPData[p]) do
+			if typeof(v) == "Instance" then
+				v:Destroy()
+			end
+		end
+		ESPData[p] = nil
+	end
+end)
