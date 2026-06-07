@@ -4,20 +4,20 @@ local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- SAFE LOAD
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
--- WINDOW (must exist first)
+-- WINDOW
 local Window = Rayfield:CreateWindow({
-	Name = "Client Tools",
-	LoadingTitle = "Loading UI",
-	LoadingSubtitle = "Local System",
+	Name = "Admin Panel V2",
+	LoadingTitle = "Loading",
+	LoadingSubtitle = "Tools Ready",
 	ConfigurationSaving = { Enabled = false }
 })
 
--- TABS (THIS fixes your issue)
-local Main = Window:CreateTab("Main", 0)
-local PlayersTab = Window:CreateTab("Players", 0)
+-- TABS
+local MainTab = Window:CreateTab("Main", 0)
+local PlayerTab = Window:CreateTab("Players", 0)
+local ToolsTab = Window:CreateTab("Tools", 0)
 
 -- STATE
 local spectating = false
@@ -26,13 +26,13 @@ local target = nil
 -------------------------------------------------
 -- MAIN TAB
 -------------------------------------------------
-Main:CreateLabel("Client Tools Panel")
+MainTab:CreateLabel("Admin Panel Loaded")
 
-Main:CreateToggle({
+MainTab:CreateToggle({
 	Name = "Spectate Mode",
-	CurrentValue = false,
 	Callback = function(v)
 		spectating = v
+
 		if not v then
 			local char = LP.Character
 			if char then
@@ -46,26 +46,26 @@ Main:CreateToggle({
 })
 
 -------------------------------------------------
--- PLAYER TAB
+-- PLAYER TAB (CORE ADMIN CONTROL)
 -------------------------------------------------
 local function refreshPlayers()
-	for _,v in ipairs(PlayersTab:GetChildren()) do
+	for _,v in ipairs(PlayerTab:GetChildren()) do
 		if v:IsA("TextButton") then v:Destroy() end
 	end
 
 	for _,p in ipairs(Players:GetPlayers()) do
 		if p ~= LP then
 
-			PlayersTab:CreateButton({
-				Name = "Spectate: " .. p.Name,
+			PlayerTab:CreateButton({
+				Name = "👁 Spectate " .. p.Name,
 				Callback = function()
 					target = p
 					spectating = true
 				end
 			})
 
-			PlayersTab:CreateButton({
-				Name = "Teleport (Local): " .. p.Name,
+			PlayerTab:CreateButton({
+				Name = "🚀 Teleport to " .. p.Name,
 				Callback = function()
 					local char = LP.Character
 					local tchar = p.Character
@@ -81,6 +81,20 @@ local function refreshPlayers()
 				end
 			})
 
+			PlayerTab:CreateButton({
+				Name = "📍 View Position " .. p.Name,
+				Callback = function()
+					if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+						local pos = p.Character.HumanoidRootPart.Position
+						Rayfield:Notify({
+							Title = p.Name,
+							Content = "Pos: "..math.floor(pos.X)..","..math.floor(pos.Y)..","..math.floor(pos.Z),
+							Duration = 3
+						})
+					end
+				end
+			})
+
 		end
 	end
 end
@@ -90,7 +104,47 @@ Players.PlayerRemoving:Connect(refreshPlayers)
 refreshPlayers()
 
 -------------------------------------------------
--- LOOP
+-- TOOLS TAB (FEEL LIKE “REAL ADMIN PANEL”)
+-------------------------------------------------
+local speed = 16
+local jump = 50
+
+ToolsTab:CreateSlider({
+	Name = "WalkSpeed",
+	Range = {16, 100},
+	Increment = 1,
+	Callback = function(v)
+		speed = v
+		local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+		if hum then hum.WalkSpeed = v end
+	end
+})
+
+ToolsTab:CreateSlider({
+	Name = "JumpPower",
+	Range = {50, 200},
+	Increment = 1,
+	Callback = function(v)
+		jump = v
+		local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.UseJumpPower = true
+			hum.JumpPower = v
+		end
+	end
+})
+
+ToolsTab:CreateSlider({
+	Name = "FOV",
+	Range = {70, 120},
+	Increment = 1,
+	Callback = function(v)
+		Camera.FieldOfView = v
+	end
+})
+
+-------------------------------------------------
+-- SPECTATE LOOP
 -------------------------------------------------
 RunService.RenderStepped:Connect(function()
 	if spectating and target and target.Character then
